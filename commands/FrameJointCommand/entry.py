@@ -257,9 +257,7 @@ def _extrude_cut_body(
         adsk.fusion.DistanceExtentDefinition.create(cut_dist),  # type: ignore[arg-type]
         ext_dir
     )
-    bodies_col = adsk.core.ObjectCollection.create()
-    bodies_col.add(body)
-    ext_input.participantBodies = bodies_col  # type: ignore[assignment]
+    ext_input.participantBodies = [body]  # type: ignore[assignment]
     extrudes.add(ext_input)
 
 
