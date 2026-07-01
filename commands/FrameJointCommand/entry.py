@@ -269,19 +269,45 @@ def _extrude_cut_body(
 def _apply_miter(root_comp: adsk.fusion.Component,
                  body_a: adsk.fusion.BRepBody,
                  body_b: adsk.fusion.BRepBody) -> None:
-    """Miter plane normal = normalize(dir_A − dir_B).
+    """Miter plane normal = angle bisector of the two member directions.
 
-    Equidistant from both axes: (P−junction)·dir_A = (P−junction)·dir_B.
-    Each body is cut on the side dominated by the other member.
+    Both dir_a and dir_b are computed as unit vectors FROM the junction TO
+    the far endpoint of each member — i.e. pointing AWAY from the junction.
+    Their sum is the bisector of the included angle, which is the correct
+    miter-plane normal for any joint angle.
+
+    Using _get_body_long_axis (axis-snapped ±1 vectors) was wrong because:
+      • It ignored the actual direction relative to the junction (+ vs −).
+      • dir_A − dir_B produced a perpendicular to the bisector, not the
+        bisector itself, giving the wrong 45° face for many configurations.
     """
-    dir_a    = _get_body_long_axis(body_a)
-    dir_b    = _get_body_long_axis(body_b)
     junction = _find_junction_point(body_a, body_b)
 
+    # Compute far endpoints once — reused for both miter_n and cut direction.
+    def _far_endpoint(body: adsk.fusion.BRepBody) -> adsk.core.Point3D:
+        eps = _get_body_endpoints(body)
+        return eps[0] if eps[0].distanceTo(junction) >= eps[1].distanceTo(junction) else eps[1]
+
+    far_a = _far_endpoint(body_a)
+    far_b = _far_endpoint(body_b)
+
+    # Actual unit vectors FROM junction TOWARD each member's far end.
+    dir_a = _normalize(adsk.core.Vector3D.create(
+        far_a.x - junction.x,
+        far_a.y - junction.y,
+        far_a.z - junction.z,
+    ))
+    dir_b = _normalize(adsk.core.Vector3D.create(
+        far_b.x - junction.x,
+        far_b.y - junction.y,
+        far_b.z - junction.z,
+    ))
+
+    # Bisector = sum of the two away-vectors (both point from junction outward).
     miter_n = _normalize(adsk.core.Vector3D.create(
-        dir_a.x - dir_b.x,
-        dir_a.y - dir_b.y,
-        dir_a.z - dir_b.z,
+        dir_a.x + dir_b.x,
+        dir_a.y + dir_b.y,
+        dir_a.z + dir_b.z,
     ))
 
     if miter_n.length < 1e-6:
@@ -291,25 +317,17 @@ def _apply_miter(root_comp: adsk.fusion.Component,
         )
 
     # Build the miter plane in root_comp so both sub-components can reference it.
-    # A plane in a sibling component (body_a.parentComponent) cannot be used as
-    # the planarEntity for a sketch in body_b.parentComponent — Fusion 360 raises
-    # "planarEntity is not in the assembly context of this component".
-    # Root-component construction planes are always in scope for every child.
     cut_plane = _make_miter_plane(root_comp, junction, miter_n)
 
-    # Cut each body using its own component context
-    for body, endpoints in ((body_a, _get_body_endpoints(body_a)),
-                            (body_b, _get_body_endpoints(body_b))):
-        d1 = endpoints[0].distanceTo(junction)
-        d2 = endpoints[1].distanceTo(junction)
-        far_end = endpoints[0] if d1 >= d2 else endpoints[1]
-        to_far  = adsk.core.Vector3D.create(
+    # Cut each body: the far end is on the + side of the bisector plane,
+    # so use_negative_dir=True removes the − side (extension near the junction).
+    for body, far_end in ((body_a, far_a), (body_b, far_b)):
+        to_far = adsk.core.Vector3D.create(
             far_end.x - junction.x,
             far_end.y - junction.y,
             far_end.z - junction.z,
         )
         dot = to_far.dotProduct(miter_n)
-        # Member on + side → cut − side (remove the "other member's territory")
         _extrude_cut_body(body, cut_plane, use_negative_dir=(dot > 0))
 
     cut_plane.isLightBulbOn = False
