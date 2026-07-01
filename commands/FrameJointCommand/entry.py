@@ -257,7 +257,10 @@ def _extrude_cut_body(
         adsk.fusion.DistanceExtentDefinition.create(cut_dist),  # type: ignore[arg-type]
         ext_dir
     )
-    ext_input.participantBodies = [body]  # type: ignore[assignment]
+    # participantBodies is intentionally omitted: the extrude is added to
+    # body.parentComponent which contains exactly one body (the swept member),
+    # so the cut is naturally scoped to that body without needing to specify it.
+    # Passing a list or ObjectCollection here causes a TypeError in Fusion 360 2026.
     extrudes.add(ext_input)
 
 
