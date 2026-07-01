@@ -179,24 +179,34 @@ class FrameExecuteHandler(adsk.core.CommandEventHandler):
                     member_name = f"{selected_profile.replace(' ', '_')}_{i + 1}"
 
                     # ── Detect shared endpoints ───────────────────────────────
-                    # A shared endpoint is one where this line meets any OTHER
-                    # selected line — i.e. a joint point that will be mitered.
+                    # Check ALL non-construction lines in the same sketch, not
+                    # just the current selection.  This means a single-line run
+                    # still detects that its endpoint touches other skeleton lines
+                    # drawn in the sketch, so the extension is added even when the
+                    # user generates members one batch at a time.
                     sp_geom = line.startSketchPoint.geometry
                     ep_geom = line.endSketchPoint.geometry
+
+                    _sk_lines_col = line.parentSketch.sketchCurves.sketchLines
+                    _all_sk_lines = [
+                        _sk_lines_col.item(j)
+                        for j in range(_sk_lines_col.count)
+                        if not _sk_lines_col.item(j).isConstruction
+                    ]
 
                     start_shared = any(
                         other is not line and (
                             sp_geom.distanceTo(other.startSketchPoint.geometry) < config.TOLERANCE or
                             sp_geom.distanceTo(other.endSketchPoint.geometry)   < config.TOLERANCE
                         )
-                        for other in selected_lines
+                        for other in _all_sk_lines
                     )
                     end_shared = any(
                         other is not line and (
                             ep_geom.distanceTo(other.startSketchPoint.geometry) < config.TOLERANCE or
                             ep_geom.distanceTo(other.endSketchPoint.geometry)   < config.TOLERANCE
                         )
-                        for other in selected_lines
+                        for other in _all_sk_lines
                     )
 
                     # ── Build sweep path (extend past shared endpoints) ───────
