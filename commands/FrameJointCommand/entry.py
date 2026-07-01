@@ -226,15 +226,22 @@ def _make_miter_plane(
 
 def _extrude_cut_body(
         body:              adsk.fusion.BRepBody,
-        cut_plane:         adsk.fusion.ConstructionPlane,
+        junction:          adsk.core.Point3D,
+        miter_n:           adsk.core.Vector3D,
         use_negative_dir:  bool,
 ) -> None:
-    """Cuts body using an extrude from cut_plane.
+    """Cuts body at the miter plane defined by (junction, miter_n).
 
-    Uses body.parentComponent so the extrude operates in the correct
-    component context (avoids cross-component feature errors).
+    The cut plane is created INSIDE body.parentComponent so the sketch
+    and extrude-cut have no cross-component plane references.  Sharing a
+    root-level plane between sibling sub-components causes the sketch's
+    local coordinate origin to be mis-mapped, which means the ±30 cm
+    rectangle may miss the member body entirely.
     """
     comp: adsk.fusion.Component = body.parentComponent  # type: ignore[assignment]
+
+    # Each body gets its own plane created in its own component context.
+    cut_plane = _make_miter_plane(comp, junction, miter_n)
 
     sketch: adsk.fusion.Sketch = comp.sketches.add(cut_plane)
     half = 30.0
@@ -257,17 +264,16 @@ def _extrude_cut_body(
         adsk.fusion.DistanceExtentDefinition.create(cut_dist),  # type: ignore[arg-type]
         ext_dir
     )
-    # participantBodies is intentionally omitted: the extrude is added to
-    # body.parentComponent which contains exactly one body (the swept member),
-    # so the cut is naturally scoped to that body without needing to specify it.
-    # Passing a list or ObjectCollection here causes a TypeError in Fusion 360 2026.
+    # participantBodies intentionally omitted — each sub-component has exactly
+    # one swept body, so the cut is naturally scoped to it without specifying
+    # it.  Passing a list/ObjectCollection causes TypeError in Fusion 360 2026.
     extrudes.add(ext_input)
+    cut_plane.isLightBulbOn = False  # hide the temporary helper plane
 
 
 # ── Miter cut ─────────────────────────────────────────────────────────────────
 
-def _apply_miter(root_comp: adsk.fusion.Component,
-                 body_a: adsk.fusion.BRepBody,
+def _apply_miter(body_a: adsk.fusion.BRepBody,
                  body_b: adsk.fusion.BRepBody) -> None:
     """Miter plane normal = angle bisector of the two member directions.
 
@@ -316,11 +322,10 @@ def _apply_miter(root_comp: adsk.fusion.Component,
             "Use T-Trim for members running in parallel."
         )
 
-    # Build the miter plane in root_comp so both sub-components can reference it.
-    cut_plane = _make_miter_plane(root_comp, junction, miter_n)
-
-    # Cut each body: the far end is on the + side of the bisector plane,
-    # so use_negative_dir=True removes the − side (extension near the junction).
+    # Cut each body with its own plane created in its own component.
+    # This avoids cross-component plane sharing, which caused the sketch's
+    # coordinate origin to be mis-mapped and the ±30 cm cut rectangle to
+    # miss the member body.
     for body, far_end in ((body_a, far_a), (body_b, far_b)):
         to_far = adsk.core.Vector3D.create(
             far_end.x - junction.x,
@@ -328,9 +333,8 @@ def _apply_miter(root_comp: adsk.fusion.Component,
             far_end.z - junction.z,
         )
         dot = to_far.dotProduct(miter_n)
-        _extrude_cut_body(body, cut_plane, use_negative_dir=(dot > 0))
+        _extrude_cut_body(body, junction, miter_n, use_negative_dir=(dot > 0))
 
-    cut_plane.isLightBulbOn = False
     _log("  Miter cut applied.")
 
 
@@ -407,7 +411,7 @@ class JointExecuteHandler(adsk.core.CommandEventHandler):
             try:
                 _log(f"Applying '{operation}' ...")
                 if operation == _OP_MITER:
-                    _apply_miter(root_comp, body_a, body_b)
+                    _apply_miter(body_a, body_b)
                 elif operation == _OP_TTRIM:
                     _apply_ttrim(body_a, body_b)
                 elif operation == _OP_TTRIM_R:
