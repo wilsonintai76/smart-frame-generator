@@ -1,0 +1,13 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "addin",
+    "id": "SmartFrameGenerator_WilsonAddin",
+    "author": "WILSON BIN INTAI",
+    "description": {
+        "": "Smart automated structural frame generator."
+    },
+    "version": "1.0.0",
+    "runOnStartup": false,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
