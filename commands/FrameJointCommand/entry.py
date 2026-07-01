@@ -290,10 +290,12 @@ def _apply_miter(root_comp: adsk.fusion.Component,
             "Use T-Trim for members running in parallel."
         )
 
-    # Build the miter plane in body_a's own component — avoids root-component
-    # environment restrictions and keeps all geometry in a valid context.
-    comp_a: adsk.fusion.Component = body_a.parentComponent  # type: ignore[assignment]
-    cut_plane = _make_miter_plane(comp_a, junction, miter_n)
+    # Build the miter plane in root_comp so both sub-components can reference it.
+    # A plane in a sibling component (body_a.parentComponent) cannot be used as
+    # the planarEntity for a sketch in body_b.parentComponent — Fusion 360 raises
+    # "planarEntity is not in the assembly context of this component".
+    # Root-component construction planes are always in scope for every child.
+    cut_plane = _make_miter_plane(root_comp, junction, miter_n)
 
     # Cut each body using its own component context
     for body, endpoints in ((body_a, _get_body_endpoints(body_a)),
