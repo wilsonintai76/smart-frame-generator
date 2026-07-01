@@ -166,17 +166,14 @@ class FrameExecuteHandler(adsk.core.CommandEventHandler):
                     if line:
                         selected_lines.append(line)
 
-                # Extension amount: each member is swept slightly PAST shared
-                # endpoints so the miter cut plane (placed at the skeleton corner)
-                # has material to remove on both sides.  Use the largest profile
-                # dimension as a safe minimum; fall back to the default tube size.
-                # Minimum extension = profile_size / 2 for a 90° miter;
-                # the +1 cm margin keeps acute angles workable.
+                # Extension = profile_size / 2 (exact minimum for 90° miter)
+                # + 1 mm tolerance for floating-point stability.
+                # Only use the actual profile dimensions — no I-beam fallback
+                # that would over-extend smaller profiles.
                 ext_size = max(
-                    config.IBEAM_H,
-                    width_val  if width_val  is not None else 0.0,
-                    height_val if height_val is not None else 0.0,
-                ) / 2.0 + 1.0
+                    width_val  if width_val  is not None else 1.0,
+                    height_val if height_val is not None else 1.0,
+                ) / 2.0 + 0.1
 
                 for i, line in enumerate(selected_lines):
                     member_name = f"{selected_profile.replace(' ', '_')}_{i + 1}"
