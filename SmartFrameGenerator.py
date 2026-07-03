@@ -11,14 +11,14 @@ if root_dir not in sys.path:
 from . import commands
 from .lib import fusionAddInUtils as futil
 
-def run(context):
+def run(context: object) -> None:
     try:
         commands.start()
     except:
         ui = adsk.core.Application.get().userInterface
         ui.messageBox(f"SmartFrameGenerator Crashed on Startup!\n\n{traceback.format_exc()}")
 
-def stop(context):
+def stop(context: object) -> None:
     try:
         futil.clear_handlers()
         commands.stop()

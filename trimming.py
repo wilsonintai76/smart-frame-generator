@@ -9,7 +9,7 @@ def _log(message: str) -> None:
     app = adsk.core.Application.get()
     palette = app.userInterface.palettes.itemById('TextCommands')
     if palette:
-        palette.writeText(f"[SmartFrameGenerator] {message}")
+        palette.writeText(f"[SmartFrameGenerator] {message}")  # type: ignore[attr-defined]
 
 
 class Trimmer:
@@ -44,4 +44,4 @@ class Trimmer:
 
         total = succeeded + failed
         _log(f"Trim complete: {succeeded}/{total} joints trimmed successfully."
-             + (f"  ({failed} failed — see above)" if failed else ""))
+             + (f"  ({failed} failed — see above)" if failed else ""))
